@@ -1,0 +1,10 @@
+{
+  "domain": "larnitech",
+  "name": "Larnitech (Local API2)",
+  "version": "0.1.0",
+  "documentation": "https://wiki.larnitech.com/API2",
+  "requirements": [],
+  "codeowners": [],
+  "config_flow": true,
+  "iot_class": "local_push"
+}

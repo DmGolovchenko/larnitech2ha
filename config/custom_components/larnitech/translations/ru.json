@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Подключение Larnitech",
+        "description": "Укажи параметры локального WebSocket API2.",
+        "data": {
+          "host": "Хост",
+          "port": "Порт",
+          "api_key": "API ключ"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Не удаётся подключиться",
+      "invalid_auth": "Неверная авторизация"
+    },
+    "abort": {
+      "already_configured": "Устройство уже настроено"
+    }
+  }
+}

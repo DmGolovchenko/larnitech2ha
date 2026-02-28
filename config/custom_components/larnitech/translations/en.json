@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Larnitech",
+        "description": "Enter your local Larnitech API2 WebSocket settings.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "api_key": "API key"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect",
+      "invalid_auth": "Invalid authentication"
+    },
+    "abort": {
+      "already_configured": "Device is already configured"
+    }
+  }
+}

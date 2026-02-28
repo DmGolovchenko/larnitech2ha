@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.idea/
+
+# Environment variables
+.env
+
+# Home Assistant
+config/.storage/
+config/home-assistant.log*
+config/home-assistant_v2.db*
+config/.HA_VERSION
+config/.ha_run.lock
+config/.cloud/
+config/deps/
+
+# Git
+.git/
+
+# OS
+.DS_Store
+Thumbs.db
+
+/testing/.env

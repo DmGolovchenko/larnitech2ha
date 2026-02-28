@@ -1,0 +1,11 @@
+services:
+  homeassistant:
+    image: ${HA_IMAGE}
+    container_name: ha_larnitech_dev
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ}
+    volumes:
+      - ${HA_CONFIG_PATH}:/config
+    ports:
+      - "${HA_PORT}:8123"
