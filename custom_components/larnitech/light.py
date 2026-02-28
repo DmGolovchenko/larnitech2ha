@@ -79,7 +79,7 @@ class LarnitechLight(LightEntity):
         if self._dev.type == "rgb-lamp":
             return {ColorMode.HS}
         # dimer-lamp можно сделать BRIGHTNESS, если хочешь
-        if self._dev.type == "dimer-lamp":
+        if self._dev.type in ("dimer-lamp", "dimmer-lamp"):
             return {ColorMode.BRIGHTNESS}
         return {ColorMode.ONOFF}
 
@@ -88,7 +88,7 @@ class LarnitechLight(LightEntity):
         # Текущий режим можно отдавать как единственный поддерживаемый
         if self._dev.type == "rgb-lamp":
             return ColorMode.HS
-        if self._dev.type == "dimer-lamp":
+        if self._dev.type in ("dimer-lamp", "dimmer-lamp"):
             return ColorMode.BRIGHTNESS
         return ColorMode.ONOFF
 
