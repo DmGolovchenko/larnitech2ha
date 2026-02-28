@@ -17,13 +17,13 @@ env/
 .env
 
 # Home Assistant
-config/.storage/
-config/home-assistant.log*
-config/home-assistant_v2.db*
-config/.HA_VERSION
-config/.ha_run.lock
-config/.cloud/
-config/deps/
+/.storage/
+/home-assistant.log*
+/home-assistant_v2.db*
+/.HA_VERSION
+/.ha_run.lock
+/.cloud/
+/deps/
 
 # Git
 .git/
