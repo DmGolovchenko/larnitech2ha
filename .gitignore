@@ -24,6 +24,9 @@ env/
 /.ha_run.lock
 /.cloud/
 /deps/
+# Config - ignore everything except custom_components
+/config/*
+!/config/custom_components/
 
 # Git
 .git/

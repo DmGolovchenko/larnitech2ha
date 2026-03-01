@@ -85,14 +85,14 @@ class LarnitechCover(CoverEntity):
     @property
     def current_cover_position(self) -> int | None:
         """
-        0..100 where 0=closed, 100=open.
+        0..100 where 0=closed, 100=opened.
         Prefer numeric 'position'. Fallback to textual state.
         """
         st = self._status()
 
         pos = st.get("position")
         if isinstance(pos, (int, float)):
-            return max(0, min(100, int(round(pos))))
+            return 100 - max(0, min(100, int(round(pos))))
 
         # fallback if position missing
         state = st.get("state")
@@ -110,7 +110,7 @@ class LarnitechCover(CoverEntity):
         """Let HA know if cover is closed."""
         pos = self.current_cover_position
         if pos is not None:
-            return pos == 0
+            return pos == 100
 
         state = self._status().get("state")
         if isinstance(state, str):
@@ -125,7 +125,7 @@ class LarnitechCover(CoverEntity):
         target = st.get("target")
 
         if isinstance(pos, (int, float)) and isinstance(target, (int, float)):
-            return target > pos
+            return target < pos
 
         return None
 
@@ -136,17 +136,17 @@ class LarnitechCover(CoverEntity):
         target = st.get("target")
 
         if isinstance(pos, (int, float)) and isinstance(target, (int, float)):
-            return target < pos
+            return target > pos
 
         return None
 
     async def async_open_cover(self, **kwargs):
         # Открыть = 100%
-        await self.async_set_cover_position(position=100)
+        await self.async_set_cover_position(position=0)
 
     async def async_close_cover(self, **kwargs):
         # Закрыть = 0%
-        await self.async_set_cover_position(position=0)
+        await self.async_set_cover_position(position=100)
 
     async def async_stop_cover(self, **kwargs):
         # Тут есть неопределённость: как именно Larnitech принимает "stop".
