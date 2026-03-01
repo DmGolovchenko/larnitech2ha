@@ -6,23 +6,25 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.device_registry import DeviceInfo
 
-from .const import DOMAIN
+from .const import DOMAIN, DATA_CLIENT, DATA_HUB_IDENT
 from .client import LarnitechClient, DeviceInfo as LarnitechDeviceInfo
 
 SUPPORTED_SENSOR_TYPES = {"temperature-sensor", "illumination-sensor", "motion-sensor", "humidity-sensor", "co2-sensor"}
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
-    client: LarnitechClient = hass.data[DOMAIN][entry.entry_id]["client"]
+    client: LarnitechClient = hass.data[DOMAIN][entry.entry_id][DATA_CLIENT]
 
     entities = []
     for dev in client.devices.values():
         if dev.type in SUPPORTED_SENSOR_TYPES:
-            entities.append(LarnitechSensor(client, dev))
+            entities.append(LarnitechSensor(hass, entry.entry_id, client, dev))
 
     async_add_entities(entities)
 
 class LarnitechSensor(SensorEntity):
-    def __init__(self, client: LarnitechClient, dev: LarnitechDeviceInfo) -> None:
+    def __init__(self, hass: HomeAssistant, entry_id: str, client: LarnitechClient, dev: LarnitechDeviceInfo) -> None:
+        self.hass = hass
+        self._entry_id = entry_id
         self._client = client
         self._dev = dev
         self._addr = dev.addr
@@ -34,13 +36,14 @@ class LarnitechSensor(SensorEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
+        hub_ident = self.hass.data[DOMAIN][self._entry_id][DATA_HUB_IDENT]
         return DeviceInfo(
             identifiers={(DOMAIN, self._addr)},
             name=self._dev.name,
             manufacturer="Larnitech",
             model=self._dev.type,
             suggested_area=self._dev.area or None,
-            via_device=(DOMAIN, "larnitech_gateway"),
+            via_device=hub_ident
         )
 
     @property

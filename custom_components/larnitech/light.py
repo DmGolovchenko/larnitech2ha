@@ -7,24 +7,26 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.util.color import color_hs_to_RGB  # не обязателен, если RGB не нужно
 
-from .const import DOMAIN
+from .const import DOMAIN, DATA_CLIENT, DATA_HUB_IDENT
 from .client import LarnitechClient, DeviceInfo as LarnitechDeviceInfo
 
 SUPPORTED_LIGHT_TYPES = {"lamp", "dimer-lamp", "dimmer-lamp", "light", "light-scheme", "rgb-lamp"}
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
-    client: LarnitechClient = hass.data[DOMAIN][entry.entry_id]["client"]
+    client: LarnitechClient = hass.data[DOMAIN][entry.entry_id][DATA_CLIENT]
 
     entities = []
     for dev in client.devices.values():
         if dev.type in SUPPORTED_LIGHT_TYPES:
-            entities.append(LarnitechLight(client, dev))
+            entities.append(LarnitechLight(hass, entry.entry_id, client, dev))
 
     async_add_entities(entities)
 
 
 class LarnitechLight(LightEntity):
-    def __init__(self, client: LarnitechClient, dev: LarnitechDeviceInfo) -> None:
+    def __init__(self, hass: HomeAssistant, entry_id: str, client: LarnitechClient, dev: LarnitechDeviceInfo) -> None:
+        self.hass = hass
+        self._entry_id = entry_id
         self._client = client
         self._dev = dev
         self._addr = dev.addr
@@ -36,13 +38,14 @@ class LarnitechLight(LightEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
+        hub_ident = self.hass.data[DOMAIN][self._entry_id][DATA_HUB_IDENT]
         return DeviceInfo(
             identifiers={(DOMAIN, self._addr)},
             name=self._dev.name,
             manufacturer="Larnitech",
             model=self._dev.type,
             suggested_area=self._dev.area or None,
-            via_device=(DOMAIN, "larnitech_gateway"),
+            via_device=hub_ident
         )
 
     @property
