@@ -85,40 +85,37 @@ class LarnitechCover(CoverEntity):
     def _status(self) -> dict:
         return self._client.states.get(self._addr, {})
 
+    def _lt_to_ha_pos(self, lt_pos: float) -> int:
+        """Larnitech: 0=open, 100=closed  ->  HA: 0=closed, 100=open"""
+        return max(0, min(100, int(round(100 - lt_pos))))
+
+    def _ha_to_lt_pos(self, ha_pos: float) -> float:
+        """HA: 0=closed, 100=open  ->  Larnitech: 0=open, 100=closed"""
+        return float(max(0, min(100, 100 - ha_pos)))
+
     @property
     def current_cover_position(self) -> int | None:
-        """
-        0..100 where 0=closed, 100=opened.
-        Prefer numeric 'position'. Fallback to textual state.
-        """
-        st = self._status()
+        lt_pos = self._status().get("position")
+        if isinstance(lt_pos, (int, float)):
+            return self._lt_to_ha_pos(lt_pos)
 
-        pos = st.get("position")
-        if isinstance(pos, (int, float)):
-            return 100 - max(0, min(100, int(round(pos))))
-
-        # fallback if position missing
-        state = st.get("state")
+        state = self._status().get("state")
         if isinstance(state, str):
             s = state.lower()
             if s == "opened":
-                return 100
+                return 100  # в HA это open
             if s == "closed":
-                return 0
-            # middle without numeric -> unknown
+                return 0    # в HA это closed
         return None
 
     @property
     def is_closed(self) -> bool | None:
-        """Let HA know if cover is closed."""
         pos = self.current_cover_position
         if pos is not None:
-            return pos == 100
-
+            return pos == 0
         state = self._status().get("state")
         if isinstance(state, str):
             return state.lower() == "closed"
-
         return None
 
     @property
@@ -145,11 +142,11 @@ class LarnitechCover(CoverEntity):
 
     async def async_open_cover(self, **kwargs):
         # Открыть = 100%
-        await self.async_set_cover_position(position=0)
+        await self.async_set_cover_position(position=100) # HA open
 
     async def async_close_cover(self, **kwargs):
         # Закрыть = 0%
-        await self.async_set_cover_position(position=100)
+        await self.async_set_cover_position(position=0) # HA close
 
     async def async_stop_cover(self, **kwargs):
         # Тут есть неопределённость: как именно Larnitech принимает "stop".
@@ -158,14 +155,12 @@ class LarnitechCover(CoverEntity):
         await self._client.status_set(self._addr, {"state": "stop"})
 
     async def async_set_cover_position(self, **kwargs):
-        """Set target position in percent."""
-        pos = kwargs.get("position")
-        if pos is None:
+        ha_pos = kwargs.get("position")
+        if ha_pos is None:
             return
 
-        # Larnitech обычно понимает target в процентах.
-        # Если у тебя окажется, что нужно "position" вместо "target" — просто поменяешь поле.
-        await self._client.status_set(self._addr, {"target": float(pos)})
+        lt_target = self._ha_to_lt_pos(ha_pos)
+        await self._client.status_set(self._addr, {"target": lt_target})
 
     async def async_added_to_hass(self):
         def _on_status(addr: str, status: dict):
