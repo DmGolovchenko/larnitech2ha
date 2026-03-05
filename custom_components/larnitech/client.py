@@ -27,9 +27,10 @@ class DeviceInfo:
     type: str
     name: str
     area: str | None
+    subType: str | None
     status: dict[str, Any] | None
-    linked: list[dict[str, Any]]
-
+    linked:  list[dict[str, Any]]
+    automations:  list[str] | None
 
 class LarnitechClient:
     """
@@ -271,10 +272,12 @@ class LarnitechClient:
                 DeviceInfo(
                     addr=addr,
                     type=d.get("type", "unknown"),
+                    subType=d.get("sub-type", None),
                     name=d.get("name") or addr,
                     area=d.get("area"),
                     status=d.get("status"),
-                    linked=d.get("linked", [])
+                    linked=d.get("linked", []),
+                    automations=d.get("automations", None),
                 )
             )
         return out

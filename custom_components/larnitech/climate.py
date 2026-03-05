@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from homeassistant.components.climate import ClimateEntity
-from homeassistant.components.climate.const import HVACMode, ClimateEntityFeature
+from homeassistant.components.climate.const import HVACMode, HVACAction, ClimateEntityFeature
 from homeassistant.const import UnitOfTemperature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -12,7 +12,6 @@ from .const import DOMAIN, DATA_CLIENT, DATA_HUB_IDENT
 from .client import LarnitechClient, DeviceInfo as LarnitechDeviceInfo
 
 SUPPORTED_CLIMATE_TYPES = {"valve-heating", "conditioner"}
-
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
     client: LarnitechClient = hass.data[DOMAIN][entry.entry_id][DATA_CLIENT]
@@ -29,10 +28,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 class LarnitechHeatingValve(ClimateEntity):
     """Larnitech valve-heating as HA climate entity."""
-
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
+
+    # Optional, but recommended for nice UI control
+    _attr_min_temp = 5.0
+    _attr_max_temp = 40.0
+    _attr_target_temperature_step = 0.1
+
+    # _attr_preset_modes = PRESET_MODES
 
     def __init__(self, hass: HomeAssistant, entry_id: str, client: LarnitechClient, dev: LarnitechDeviceInfo) -> None:
         self.hass = hass
@@ -43,7 +48,11 @@ class LarnitechHeatingValve(ClimateEntity):
         self._unsub = None
 
         # Можно расширять по мере появления новых automation значений
-        self._known_presets: set[str] = set()
+        automations = getattr(dev, "automations", None)
+        if automations is not None:
+            self._known_presets: set[str] = set(automations) if not isinstance(automations, set) else automations
+        else:
+            self._known_presets: set[str] = set()
 
     @property
     def unique_id(self) -> str:
