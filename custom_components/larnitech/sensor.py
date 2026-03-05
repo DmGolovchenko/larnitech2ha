@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
+from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.const import PERCENTAGE, CONCENTRATION_PARTS_PER_MILLION
 
 from .const import DOMAIN, DATA_CLIENT, DATA_HUB_IDENT
 from .client import LarnitechClient, DeviceInfo as LarnitechDeviceInfo
@@ -64,6 +65,10 @@ class LarnitechSensor(SensorEntity):
             return SensorDeviceClass.TEMPERATURE
         if self._dev.type == "illumination-sensor":
             return SensorDeviceClass.ILLUMINANCE
+        if self._dev.type == "humidity-sensor":
+            return SensorDeviceClass.HUMIDITY
+        if self._dev.type == "co2-sensor":
+            return SensorDeviceClass.CO2
         return None
 
     @property
@@ -72,6 +77,17 @@ class LarnitechSensor(SensorEntity):
             return "°C"
         if self._dev.type == "illumination-sensor":
             return "lx"
+        if self._dev.type == "humidity-sensor":
+            return PERCENTAGE   # это "%"
+        if self._dev.type == "co2-sensor":
+            return CONCENTRATION_PARTS_PER_MILLION  # "ppm"
+        return None
+
+    @property
+    def state_class(self):
+        # для корректной долгосрочной статистики
+        if self._dev.type in ("temperature-sensor", "illumination-sensor", "humidity-sensor", "co2-sensor"):
+            return SensorStateClass.MEASUREMENT
         return None
 
     async def async_added_to_hass(self):
