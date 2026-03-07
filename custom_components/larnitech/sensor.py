@@ -79,6 +79,8 @@ class LarnitechSensor(SensorEntity):
             return "lx"
         if self._dev.type == "humidity-sensor":
             return PERCENTAGE   # это "%"
+        if self._dev.type == "motion-sensor":
+            return PERCENTAGE   # это "%"
         if self._dev.type == "co2-sensor":
             return CONCENTRATION_PARTS_PER_MILLION  # "ppm"
         return None
@@ -86,7 +88,7 @@ class LarnitechSensor(SensorEntity):
     @property
     def state_class(self):
         # для корректной долгосрочной статистики
-        if self._dev.type in ("temperature-sensor", "illumination-sensor", "humidity-sensor", "co2-sensor"):
+        if self._dev.type in ("temperature-sensor", "illumination-sensor", "humidity-sensor", "motion-sensor", "co2-sensor"):
             return SensorStateClass.MEASUREMENT
         return None
 
