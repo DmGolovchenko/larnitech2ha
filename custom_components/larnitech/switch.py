@@ -11,6 +11,23 @@ from .client import LarnitechClient, DeviceInfo as LarnitechDeviceInfo
 
 SUPPORTED_SWITCH_TYPES = {"switch", "script"}
 
+
+def _is_switch_device(dev: LarnitechDeviceInfo) -> bool:
+    """
+    В switch попадают:
+    - обычные switch
+    - script
+    - lamp, но только если есть subType
+    """
+    if dev.type in SUPPORTED_SWITCH_TYPES:
+        return True
+
+    if dev.type == "lamp" and dev.subType:
+        return True
+
+    return False
+
+
 async def async_setup_entry(
         hass: HomeAssistant,
         entry: ConfigEntry,
@@ -20,7 +37,7 @@ async def async_setup_entry(
 
     entities = []
     for dev in client.devices.values():
-        if dev.type in SUPPORTED_SWITCH_TYPES:
+        if _is_switch_device(dev):
             entities.append(LarnitechSwitch(hass, entry.entry_id, client, dev))
 
     async_add_entities(entities)
@@ -41,7 +58,6 @@ class LarnitechSwitch(SwitchEntity):
         self._addr = dev.addr
         self._unsub = None
 
-        # Для momentary switch храним разобранное событие отдельно
         self._switch_pressed = False
         self._switch_event_attrs: dict = {}
 
@@ -51,7 +67,8 @@ class LarnitechSwitch(SwitchEntity):
 
     @property
     def name(self) -> str:
-        return f"{self._dev.name} ({self._addr})"
+        dev_name = self._dev.name if self._dev.name else 'switch'
+        return f"{dev_name} ({self._addr})"
         # return self._dev.name
 
     @property
@@ -69,16 +86,14 @@ class LarnitechSwitch(SwitchEntity):
     def _status(self) -> dict:
         return self._client.states.get(self._addr, {})
 
-    def _parse_switch_hex(self, hex_value: str | None) -> dict:
+    def _is_momentary_switch(self) -> bool:
         """
-        Разбор hex-статуса для Larnitech switch.
+        Только для настоящих кнопок/switch с hex-статусами.
+        lamp с subtype сюда не относится.
+        """
+        return self._dev.type == "switch"
 
-        Наблюдаемая логика:
-        - FC00  -> button down
-        - FF00  -> short press release
-        - FDxx  -> hold in progress
-        - FFxx  -> hold release (если xx > 00)
-        """
+    def _parse_switch_hex(self, hex_value: str | None) -> dict:
         result = {
             "raw_hex": hex_value,
             "hex_int": None,
@@ -102,7 +117,6 @@ class LarnitechSwitch(SwitchEntity):
         low = value & 0xFF
 
         result["hold_ticks"] = low
-        # По логам похоже примерно на ~0.1 сек на шаг
         result["hold_seconds_estimate"] = round(low * 0.1, 1)
 
         if high == 0xFC:
@@ -125,14 +139,13 @@ class LarnitechSwitch(SwitchEntity):
         attrs = {
             "addr": self._addr,
             "type": self._dev.type,
+            "subType": self._dev.subType,
             "area": self._dev.area,
         }
 
-        # Для switch добавляем разобранные события кнопки
-        if self._dev.type == "switch":
+        if self._is_momentary_switch():
             attrs.update(self._switch_event_attrs)
 
-            # На всякий случай продублируем "сырое" текущее содержимое status
             status = self._status()
             if "hex" in status:
                 attrs["status_hex"] = status.get("hex")
@@ -141,8 +154,8 @@ class LarnitechSwitch(SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        # Для script оставляем старую логику on/off
-        if self._dev.type == "script":
+        # script и lamp(subType) работают как обычные on/off switch
+        if self._dev.type in {"script", "lamp"}:
             val = self._status().get("state")
             if isinstance(val, str):
                 return val.lower() == "on"
@@ -150,10 +163,8 @@ class LarnitechSwitch(SwitchEntity):
                 return val != 0
             return False
 
-        # Для switch:
-        # on  -> кнопка сейчас нажата / удерживается
-        # off -> кнопка отпущена
-        if self._dev.type == "switch":
+        # настоящий switch-кнопка
+        if self._is_momentary_switch():
             return self._switch_pressed
 
         return False
@@ -165,8 +176,7 @@ class LarnitechSwitch(SwitchEntity):
         await self._client.status_set(self._addr, {"state": "off"})
 
     async def async_added_to_hass(self):
-        # Инициализация текущих атрибутов при старте HA / reload integration
-        if self._dev.type == "switch":
+        if self._is_momentary_switch():
             current_hex = self._status().get("hex")
             parsed = self._parse_switch_hex(current_hex)
             self._switch_event_attrs = parsed
@@ -178,7 +188,7 @@ class LarnitechSwitch(SwitchEntity):
             if addr != self._addr:
                 return
 
-            if self._dev.type == "switch":
+            if self._is_momentary_switch():
                 parsed = self._parse_switch_hex(status.get("hex"))
                 self._switch_event_attrs = parsed
 
