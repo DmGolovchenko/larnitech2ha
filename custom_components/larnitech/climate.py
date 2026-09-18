@@ -29,7 +29,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 class LarnitechHeatingValve(ClimateEntity):
     """Larnitech valve-heating as HA climate entity."""
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
-    _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
+    _attr_supported_features = (
+        ClimateEntityFeature.TARGET_TEMPERATURE
+        | ClimateEntityFeature.PRESET_MODE
+        | ClimateEntityFeature.TURN_ON
+        | ClimateEntityFeature.TURN_OFF
+    )
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
 
     # Optional, but recommended for nice UI control
@@ -49,10 +54,21 @@ class LarnitechHeatingValve(ClimateEntity):
 
         # Можно расширять по мере появления новых automation значений
         automations = getattr(dev, "automations", None)
-        if automations is not None:
-            self._known_presets: set[str] = set(automations) if not isinstance(automations, set) else automations
-        else:
-            self._known_presets: set[str] = set()
+        self._known_presets: set[str] = {
+            name for name in (automations or [])
+            if isinstance(name, str) and name.lower() != "null" and not self._is_off_automation(name)
+        }
+        self._last_preset: str | None = None
+        self._remember_preset(self._status().get("automation"))
+
+    @staticmethod
+    def _is_off_automation(value: object) -> bool:
+        return isinstance(value, str) and value.lower().replace(" ", "-") == "always-off"
+
+    def _remember_preset(self, value: object) -> None:
+        if isinstance(value, str) and value and value.lower() != "null" and not self._is_off_automation(value):
+            self._last_preset = value
+            self._known_presets.add(value)
 
     @property
     def unique_id(self) -> str:
@@ -95,27 +111,40 @@ class LarnitechHeatingValve(ClimateEntity):
             return
         await self._client.status_set(self._addr, {"target": float(temp)})
 
-    # --- On/Off радиатора (hvac) ---
+    # --- Режим термостата и фактическая работа клапана ---
 
     @property
     def hvac_mode(self) -> HVACMode:
+        return HVACMode.OFF if self._is_off_automation(self._status().get("automation")) else HVACMode.HEAT
+
+    @property
+    def hvac_action(self) -> HVACAction:
+        if self.hvac_mode == HVACMode.OFF:
+            return HVACAction.OFF
         state = self._status().get("state")
-        if isinstance(state, str) and state.lower() == "on":
-            return HVACMode.HEAT
-        return HVACMode.OFF
+        return HVACAction.HEATING if isinstance(state, str) and state.lower() == "on" else HVACAction.IDLE
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        if hvac_mode == HVACMode.HEAT:
-            await self._client.status_set(self._addr, {"state": "on"})
-        elif hvac_mode == HVACMode.OFF:
-            await self._client.status_set(self._addr, {"state": "off"})
+        if hvac_mode == HVACMode.OFF:
+            await self._client.status_set(self._addr, {"automation": "always-off"})
+        elif hvac_mode == HVACMode.HEAT:
+            preset = self._last_preset
+            if preset is None:
+                preset = next(iter(sorted(self._known_presets)), "Comfort")
+            await self._client.status_set(self._addr, {"automation": preset})
+
+    async def async_turn_on(self) -> None:
+        await self.async_set_hvac_mode(HVACMode.HEAT)
+
+    async def async_turn_off(self) -> None:
+        await self.async_set_hvac_mode(HVACMode.OFF)
 
     # --- Automation как preset_mode ---
 
     @property
     def preset_mode(self) -> str | None:
         val = self._status().get("automation")
-        if isinstance(val, str):
+        if isinstance(val, str) and not self._is_off_automation(val):
             return val
         return None
 
@@ -124,7 +153,7 @@ class LarnitechHeatingValve(ClimateEntity):
         # HA любит иметь список возможных preset’ов
         st = self._status()
         cur = st.get("automation")
-        if isinstance(cur, str):
+        if isinstance(cur, str) and cur and cur.lower() != "null" and not self._is_off_automation(cur):
             self._known_presets.add(cur)
         # если пока не видели ничего — вернём пусто, UI всё равно покажет текущее
         return sorted(self._known_presets)
@@ -132,6 +161,7 @@ class LarnitechHeatingValve(ClimateEntity):
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         # Позволяем выставлять любой preset (Larnitech может поддерживать разные строки)
         await self._client.status_set(self._addr, {"automation": preset_mode})
+        self._remember_preset(preset_mode)
 
     # --- Атрибуты для отладки/прозрачности ---
 
@@ -156,9 +186,7 @@ class LarnitechHeatingValve(ClimateEntity):
                 return
 
             # обновим набор пресетов на лету
-            a = status.get("automation")
-            if isinstance(a, str):
-                self._known_presets.add(a)
+            self._remember_preset(status.get("automation"))
 
             self.async_write_ha_state()
 
