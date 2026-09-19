@@ -10,6 +10,36 @@ from .const import DOMAIN, DATA_CLIENT, DATA_HUB_IDENT
 from .client import LarnitechClient, DeviceInfo as LarnitechDeviceInfo
 
 SUPPORTED_LIGHT_TYPES = {"lamp", "dimer-lamp", "dimmer-lamp", "light", "light-scheme", "rgb-lamp"}
+LARNITECH_COLOR_MAX = 250
+
+
+def _scale(value: float, source_max: float, target_max: float) -> float:
+    """Scale and clamp a value between two ranges starting at zero."""
+    return max(0.0, min(target_max, float(value) * target_max / source_max))
+
+
+def _brightness_from_larnitech(value: float) -> int:
+    return round(_scale(value, LARNITECH_COLOR_MAX, 255))
+
+
+def _brightness_to_larnitech(value: float) -> int:
+    return round(_scale(value, 255, LARNITECH_COLOR_MAX))
+
+
+def _hs_from_larnitech(hue: float, saturation: float) -> tuple[float, float]:
+    return (
+        _scale(hue, LARNITECH_COLOR_MAX, 360),
+        _scale(saturation, LARNITECH_COLOR_MAX, 100),
+    )
+
+
+def _hs_to_larnitech(hue: float, saturation: float) -> tuple[int, int]:
+    # In HA, 360 degrees is the same hue as 0 degrees.
+    normalized_hue = float(hue) % 360
+    return (
+        round(_scale(normalized_hue, 360, LARNITECH_COLOR_MAX)),
+        round(_scale(saturation, 100, LARNITECH_COLOR_MAX)),
+    )
 
 
 def _is_light_device(dev: LarnitechDeviceInfo) -> bool:
@@ -69,12 +99,20 @@ class LarnitechLight(LightEntity):
 
     @property
     def extra_state_attributes(self):
-        return {
+        attributes = {
             "addr": self._addr,
             "type": self._dev.type,
             "subType": self._dev.subType,
             "area": self._dev.area,
         }
+        if self._dev.type == "rgb-lamp":
+            status = self._status()
+            attributes.update({
+                "larnitech_level": status.get("level"),
+                "larnitech_hue": status.get("hue"),
+                "larnitech_saturation": status.get("saturation"),
+            })
+        return attributes
 
     def _status(self) -> dict:
         return self._client.states.get(self._addr, {})
@@ -109,7 +147,7 @@ class LarnitechLight(LightEntity):
         st = self._status()
         level = st.get("level")
         if isinstance(level, (int, float)):
-            return max(0, min(255, int(round(level * 255 / 100))))
+            return _brightness_from_larnitech(level)
         return None
 
     @property
@@ -120,22 +158,22 @@ class LarnitechLight(LightEntity):
         hue = st.get("hue")
         sat = st.get("saturation")
         if isinstance(hue, (int, float)) and isinstance(sat, (int, float)):
-            return (float(hue), float(sat))
+            return _hs_from_larnitech(hue, sat)
         return None
 
     async def async_turn_on(self, **kwargs):
         status = {"state": "on"}
 
         if "brightness" in kwargs and kwargs["brightness"] is not None:
-            b = int(kwargs["brightness"])
-            status["level"] = round(b * 100 / 255, 2)
+            status["level"] = _brightness_to_larnitech(kwargs["brightness"])
 
         if self._dev.type == "rgb-lamp":
             hs = kwargs.get("hs_color")
             if hs:
                 h, s = hs
-                status["hue"] = float(h)
-                status["saturation"] = float(s)
+                hue, saturation = _hs_to_larnitech(h, s)
+                status["hue"] = hue
+                status["saturation"] = saturation
 
         await self._client.status_set(self._addr, status)
 
