@@ -10,7 +10,7 @@ from .const import DOMAIN, DATA_CLIENT, DATA_HUB_IDENT
 from .client import LarnitechClient, DeviceInfo as LarnitechDeviceInfo
 
 SUPPORTED_LIGHT_TYPES = {"lamp", "dimer-lamp", "dimmer-lamp", "light", "light-scheme", "rgb-lamp"}
-LARNITECH_COLOR_MAX = 250
+LARNITECH_PERCENT_MAX = 100
 
 
 def _scale(value: float, source_max: float, target_max: float) -> float:
@@ -19,26 +19,27 @@ def _scale(value: float, source_max: float, target_max: float) -> float:
 
 
 def _brightness_from_larnitech(value: float) -> int:
-    return round(_scale(value, LARNITECH_COLOR_MAX, 255))
+    return round(_scale(value, LARNITECH_PERCENT_MAX, 255))
 
 
-def _brightness_to_larnitech(value: float) -> int:
-    return round(_scale(value, 255, LARNITECH_COLOR_MAX))
+def _brightness_to_larnitech(value: float) -> float:
+    return round(_scale(value, 255, LARNITECH_PERCENT_MAX), 2)
 
 
 def _hs_from_larnitech(hue: float, saturation: float) -> tuple[float, float]:
     return (
-        _scale(hue, LARNITECH_COLOR_MAX, 360),
-        _scale(saturation, LARNITECH_COLOR_MAX, 100),
+        _scale(hue, LARNITECH_PERCENT_MAX, 360),
+        _scale(saturation, LARNITECH_PERCENT_MAX, 100),
     )
 
 
-def _hs_to_larnitech(hue: float, saturation: float) -> tuple[int, int]:
-    # In HA, 360 degrees is the same hue as 0 degrees.
+def _hs_to_larnitech(hue: float, saturation: float) -> tuple[float, float]:
+    # API2 exposes V/S/H as percentages, although the device protocol uses
+    # byte values internally. In HA, 360 degrees is the same hue as 0 degrees.
     normalized_hue = float(hue) % 360
     return (
-        round(_scale(normalized_hue, 360, LARNITECH_COLOR_MAX)),
-        round(_scale(saturation, 100, LARNITECH_COLOR_MAX)),
+        round(_scale(normalized_hue, 360, LARNITECH_PERCENT_MAX), 2),
+        round(_scale(saturation, 100, LARNITECH_PERCENT_MAX), 2),
     )
 
 
